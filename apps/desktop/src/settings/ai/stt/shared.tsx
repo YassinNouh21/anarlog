@@ -506,7 +506,7 @@ const _PROVIDERS = [
     disabled: false,
     id: "openrouter",
     displayName: "OpenRouter",
-    badge: "After recording",
+    badge: "Live in chunks",
     icon: <ProviderLobeIcon icon={OpenRouter} />,
     baseUrl: "https://openrouter.ai/api/v1",
     models: [

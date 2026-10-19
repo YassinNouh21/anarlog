@@ -202,9 +202,14 @@ export function getSttModelTranscriptionMode(
     return "batch";
   }
 
+  // OpenRouter has no streaming API; the listener sends speech chunks to its
+  // batch API while recording, so it works as live transcription.
+  if (provider === "openrouter") {
+    return "live";
+  }
+
   if (
     provider === "groq" ||
-    provider === "openrouter" ||
     provider === "siliconflow" ||
     provider === "together" ||
     provider === "zai" ||

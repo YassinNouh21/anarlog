@@ -419,7 +419,7 @@ async fn finalize_source(
     Ok(session)
 }
 
-fn i16_bytes_to_f32(bytes: &Bytes) -> Vec<f32> {
+pub(crate) fn i16_bytes_to_f32(bytes: &Bytes) -> Vec<f32> {
     bytes
         .chunks_exact(2)
         .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / i16::MAX as f32)

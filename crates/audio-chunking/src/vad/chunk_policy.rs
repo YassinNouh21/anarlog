@@ -96,14 +96,14 @@ impl BufferedChunk {
     }
 }
 
-struct NormalizerState {
+pub(crate) struct NormalizerState {
     pending: Option<BufferedChunk>,
     min_detected_speech_samples: usize,
     merge_gap_samples: usize,
 }
 
 impl NormalizerState {
-    fn new(redemption_time: Duration) -> Self {
+    pub(crate) fn new(redemption_time: Duration) -> Self {
         Self {
             pending: None,
             min_detected_speech_samples: duration_to_samples(Duration::from_millis(
@@ -116,7 +116,12 @@ impl NormalizerState {
         }
     }
 
-    fn push(&mut self, next: BufferedChunk, output: &mut Vec<AudioChunk>) {
+    /// The short chunk still held back for merging, if any.
+    pub(crate) fn take_pending(&mut self) -> Option<AudioChunk> {
+        self.pending.take().map(|pending| pending.chunk)
+    }
+
+    pub(crate) fn push(&mut self, next: BufferedChunk, output: &mut Vec<AudioChunk>) {
         if let Some(pending) = self.pending.take() {
             if pending.gap_samples(&next) <= self.merge_gap_samples {
                 let merged = pending.merge(next);

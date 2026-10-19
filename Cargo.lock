@@ -11487,6 +11487,7 @@ name = "owhisper-client"
 version = "0.0.1"
 dependencies = [
  "am",
+ "audio-chunking",
  "audio-utils",
  "base64 0.22.1",
  "bytes",

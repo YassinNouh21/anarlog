@@ -1,5 +1,6 @@
 mod chunk_policy;
 mod continuous;
+mod live;
 mod session;
 
 use anlg_vad::silero_onnx::CHUNK_SIZE_16KHZ;
@@ -7,6 +8,7 @@ use anlg_vad::silero_onnx::CHUNK_SIZE_16KHZ;
 use crate::{AudioChunk, Chunker};
 
 pub(crate) use continuous::speech_chunks;
+pub use live::LiveSpeechChunker;
 pub(crate) use session::{VadChunkerConfig, VadSession};
 
 pub(crate) struct VadChunker {

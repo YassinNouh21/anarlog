@@ -258,6 +258,8 @@ fn test_has_live_mode() {
         AdapterKind::WisprFlow,
         AdapterKind::GoogleGenerativeAi,
         AdapterKind::Anarlog,
+        // Live through chunked batch uploads.
+        AdapterKind::OpenRouter,
     ];
     for kind in live {
         assert!(kind.has_live_mode(), "{kind:?} should support live mode");
@@ -272,7 +274,6 @@ fn test_has_live_mode() {
         AdapterKind::AzureSpeech,
         AdapterKind::GoogleCloud,
         AdapterKind::Groq,
-        AdapterKind::OpenRouter,
         AdapterKind::SiliconFlow,
         AdapterKind::Zai,
         AdapterKind::RevAi,

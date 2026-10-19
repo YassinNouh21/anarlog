@@ -176,8 +176,11 @@ impl Actor for ListenerActor {
                 tx,
                 rx_task,
                 shutdown_tx: Some(shutdown_tx),
-                progress: (!matches!(adapter_name.as_str(), "soniqo" | "apple-speech"))
-                    .then(|| stream::StreamProgress::new(Instant::now())),
+                progress: (!matches!(
+                    adapter_name.as_str(),
+                    "soniqo" | "apple-speech" | "openrouter"
+                ))
+                .then(|| stream::StreamProgress::new(Instant::now())),
             };
 
             Ok(state)
