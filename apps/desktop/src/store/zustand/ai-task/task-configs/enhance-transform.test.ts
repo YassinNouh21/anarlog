@@ -43,6 +43,11 @@ vi.mock("~/stt/meeting-chat-records", () => ({
   loadMeetingChatRecords: mocks.loadMeetingChatRecords,
 }));
 
+vi.mock("~/stt/meeting-screen-records", () => ({
+  formatMeetingScreenContext: () => "",
+  loadMeetingScreenRecords: async () => [],
+}));
+
 function createSnapshot() {
   return {
     sessionId: "session-1",

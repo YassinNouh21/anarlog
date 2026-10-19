@@ -33,6 +33,10 @@ import {
   formatMeetingChatContext,
   loadMeetingChatRecords,
 } from "~/stt/meeting-chat-records";
+import {
+  formatMeetingScreenContext,
+  loadMeetingScreenRecords,
+} from "~/stt/meeting-screen-records";
 import { getTemplateById } from "~/templates/queries";
 
 type TranscriptMeta = {
@@ -66,9 +70,12 @@ async function transformArgs(
     throw new Error(`Session ${sessionId} no longer exists`);
   }
 
-  const meetingChatContext = formatMeetingChatContext(
-    await loadMeetingChatRecords(sessionId),
-  );
+  const meetingChatContext = [
+    formatMeetingChatContext(await loadMeetingChatRecords(sessionId)),
+    formatMeetingScreenContext(await loadMeetingScreenRecords(sessionId)),
+  ]
+    .filter((value) => value.trim())
+    .join("\n\n");
   const sessionContext = getSessionContext(snapshot, meetingChatContext);
   const templateRecord = await loadTemplate(templateId);
   const preferTemplate = isTemplateNewerThanMemo(

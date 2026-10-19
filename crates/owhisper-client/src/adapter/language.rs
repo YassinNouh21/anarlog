@@ -73,3 +73,30 @@ mod tests {
         );
     }
 }
+
+/// The language to send to providers that accept one language hint. With two
+/// or more spoken languages (for example Arabic + English in one call), no
+/// hint is sent, so the provider auto-detects and handles code-switching.
+pub(crate) fn pinned_language(
+    languages: &[anlg_language::Language],
+) -> Option<&anlg_language::Language> {
+    match languages {
+        [language] => Some(language),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod pinned_language_tests {
+    use super::pinned_language;
+    use anlg_language::ISO639;
+
+    #[test]
+    fn pins_only_a_single_language() {
+        let one: Vec<anlg_language::Language> = vec![ISO639::Ar.into()];
+        let two: Vec<anlg_language::Language> = vec![ISO639::Ar.into(), ISO639::En.into()];
+        assert_eq!(pinned_language(&one).map(|l| l.iso639().code()), Some("ar"));
+        assert!(pinned_language(&two).is_none());
+        assert!(pinned_language(&[]).is_none());
+    }
+}

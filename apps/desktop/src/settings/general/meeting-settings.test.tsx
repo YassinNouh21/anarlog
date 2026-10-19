@@ -44,6 +44,7 @@ function renderMeetingSettings({
         meetingDisclosureAutoPost={meetingDisclosureAutoPost}
         captureMeetingChat={captureMeetingChat}
         captureSharedScreens={captureSharedScreens}
+        captureFullScreen={setting(false)}
       />,
     ),
     meetingDisclosureAutoPost,

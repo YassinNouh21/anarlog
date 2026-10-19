@@ -46,6 +46,7 @@ const SETTINGS_FORM_KEYS = [
   "consent_auto_send_chat",
   "capture_meeting_chat",
   "capture_shared_screens",
+  "capture_full_screen",
   "ai_language",
   "spoken_languages",
   "summary_use_main_language",
@@ -72,6 +73,7 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
       consent_auto_send_chat: settingsValue.consent_auto_send_chat,
       capture_meeting_chat: settingsValue.capture_meeting_chat,
       capture_shared_screens: settingsValue.capture_shared_screens,
+      capture_full_screen: settingsValue.capture_full_screen,
       ai_language: settingsValue.ai_language,
       summary_use_main_language: settingsValue.summary_use_main_language,
       spoken_languages: getAdditionalSpokenLanguages(
@@ -114,6 +116,7 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
         consent_auto_send_chat: normalizedValue.consent_auto_send_chat,
         capture_meeting_chat: normalizedValue.capture_meeting_chat,
         capture_shared_screens: normalizedValue.capture_shared_screens,
+        capture_full_screen: normalizedValue.capture_full_screen,
         ai_language: normalizedValue.ai_language,
         summary_use_main_language: normalizedValue.summary_use_main_language,
         spoken_languages: JSON.stringify(normalizedValue.spoken_languages),
@@ -352,6 +355,11 @@ function SettingsSectionContent({
                   value: values.capture_shared_screens,
                   onChange: (value) =>
                     submitFieldValue("capture_shared_screens", value),
+                }}
+                captureFullScreen={{
+                  value: values.capture_full_screen,
+                  onChange: (value) =>
+                    submitFieldValue("capture_full_screen", value),
                 }}
               />
             )}

@@ -1,4 +1,5 @@
 import { platform } from "@tauri-apps/plugin-os";
+import type { LanguageModel } from "ai";
 
 import { commands as detectCommands } from "@anlg/plugin-detect";
 import { commands as permissionsCommands } from "@anlg/plugin-permissions";
@@ -6,16 +7,25 @@ import { toast } from "@anlg/ui/components/ui/toast";
 
 import { getStoredSettingValues } from "~/settings/queries";
 import { resolveConfigValue } from "~/shared/config";
+import { describeMeetingScreen } from "~/stt/meeting-screen-notes";
 import { persistMeetingScreenCapture } from "~/stt/meeting-screen-records";
 
 const MEETING_SCREEN_CAPTURE_INTERVAL_MS = 3_000;
 
+type CaptureMode = "full" | "shared" | null;
+
 export function startMeetingScreenCapture({
   sessionId,
   isEnabled,
+  visionModel,
+  notesLanguage = "English",
 }: {
   sessionId: string;
   isEnabled?: () => boolean | Promise<boolean>;
+  /** Language the screen notes are written in. */
+  notesLanguage?: string;
+  /** When set, each new screen is described by this model (image input). */
+  visionModel?: LanguageModel | null;
 }) {
   let stopped = false;
   let resetSampler = true;
@@ -23,17 +33,23 @@ export function startMeetingScreenCapture({
   let pendingPersistence: Promise<void> | null = null;
   let timeout: ReturnType<typeof setTimeout> | null = null;
   let permissionWarned = false;
-  const captureIsEnabled =
-    isEnabled ??
-    (async () =>
-      resolveConfigValue(
-        "capture_shared_screens",
-        await getStoredSettingValues(),
-      ));
+  const captureMode = async (): Promise<CaptureMode> => {
+    if (isEnabled) {
+      return (await isEnabled()) ? "shared" : null;
+    }
+    const settings = await getStoredSettingValues();
+    if (resolveConfigValue("capture_full_screen", settings)) {
+      return "full";
+    }
+    return resolveConfigValue("capture_shared_screens", settings)
+      ? "shared"
+      : null;
+  };
 
   const captureOnce = async () => {
     try {
-      if (!(await captureIsEnabled())) {
+      const mode = await captureMode();
+      if (!mode) {
         resetSampler = true;
         return;
       }
@@ -46,7 +62,7 @@ export function startMeetingScreenCapture({
         if (!permissionWarned) {
           permissionWarned = true;
           toast.warning(
-            "Shared screen capture needs Screen Recording permission in Settings",
+            "Screen capture needs Screen Recording permission in Settings",
             { id: "meeting-screen-capture-warning", duration: Infinity },
           );
         }
@@ -57,12 +73,14 @@ export function startMeetingScreenCapture({
         return;
       }
       const result =
-        await detectCommands.captureMeetingScreenShare(resetSampler);
+        mode === "full"
+          ? await detectCommands.captureScreen(resetSampler)
+          : await detectCommands.captureMeetingScreenShare(resetSampler);
       resetSampler = false;
       if (stopped) {
         return;
       }
-      if (!(await captureIsEnabled()) || stopped) {
+      if ((await captureMode()) !== mode || stopped) {
         resetSampler = true;
         return;
       }
@@ -73,7 +91,8 @@ export function startMeetingScreenCapture({
         );
         return;
       }
-      if (!result.data.jpeg) {
+      const jpeg = result.data.jpeg;
+      if (!jpeg) {
         return;
       }
 
@@ -86,12 +105,25 @@ export function startMeetingScreenCapture({
         () => undefined,
       );
       pendingPersistence = settledPersistence;
+      let record: Awaited<typeof persistence>;
       try {
-        await persistence;
+        record = await persistence;
       } finally {
         if (pendingPersistence === settledPersistence) {
           pendingPersistence = null;
         }
+      }
+      if (record && mode === "full" && visionModel) {
+        // Runs in the background so a slow model never delays the next capture.
+        void describeMeetingScreen({
+          sessionId,
+          record,
+          jpeg,
+          model: visionModel,
+          language: notesLanguage,
+        }).catch((error) =>
+          console.warn("[listener] failed to describe screen", error),
+        );
       }
     } catch (error) {
       resetSampler = true;

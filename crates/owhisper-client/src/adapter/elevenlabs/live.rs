@@ -44,7 +44,7 @@ impl RealtimeSttAdapter for ElevenLabsAdapter {
 
             query_pairs.append_pair("commit_strategy", "vad");
 
-            if let Some(lang) = params.languages.first() {
+            if let Some(lang) = super::super::language::pinned_language(&params.languages) {
                 query_pairs.append_pair("language_code", lang.iso639().code());
             }
         }
@@ -284,11 +284,11 @@ mod tests {
                     not_contains: &["language_code="],
                 },
                 UrlTestCase {
-                    name: "multi_lang_uses_first",
+                    name: "multi_lang_auto_detects",
                     model: None,
-                    languages: &[ISO639::Fr, ISO639::De],
-                    contains: &["language_code=fr"],
-                    not_contains: &["language_code=de"],
+                    languages: &[ISO639::Ar, ISO639::En],
+                    contains: &["model_id="],
+                    not_contains: &["language_code="],
                 },
             ],
         );

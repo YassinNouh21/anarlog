@@ -24,6 +24,7 @@ import {
   showStartFailureToast,
   type StartFailureStage,
 } from "./start-failure";
+import { useScreenVisionModel } from "./useScreenVisionModel";
 
 import { trackAnalyticsEvent } from "~/analytics";
 import { useShell } from "~/contexts/shell";
@@ -81,6 +82,7 @@ export function useStartListeningState(
   const meetingDisclosureAutoSendChat = useConfigValue(
     "consent_auto_send_chat",
   );
+  const screenVisionModel = useScreenVisionModel();
 
   const start = useListener((state) => state.start);
   const stop = useListener((state) => state.stop);
@@ -311,7 +313,11 @@ export function useStartListeningState(
         stop();
       },
     });
-    const stopScreenCapture = startMeetingScreenCapture({ sessionId });
+    const stopScreenCapture = startMeetingScreenCapture({
+      sessionId,
+      visionModel: screenVisionModel,
+      notesLanguage: getBaseLanguageDisplayName(aiLanguage),
+    });
     setStopMeetingChatCapture(async () => {
       await Promise.all([stopChatCapture(), stopScreenCapture()]);
     });
@@ -348,6 +354,7 @@ export function useStartListeningState(
     reportStartFailure,
     retainAudio,
     openNew,
+    screenVisionModel,
     participantHumanIds,
     session,
     sessionId,
