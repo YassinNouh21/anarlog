@@ -9,6 +9,7 @@ permissions = [
     "allow-capture-meeting-chat-messages",
     "allow-capture-meeting-screen-share",
     "allow-capture-screen",
+    "allow-list-screens",
     "allow-set-respect-do-not-disturb",
     "allow-set-ignored-bundle-ids",
     "allow-set-included-bundle-ids",

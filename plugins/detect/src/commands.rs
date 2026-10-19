@@ -241,13 +241,23 @@ pub(crate) async fn capture_meeting_screen_share<R: tauri::Runtime>(
         .await?
 }
 
-/// Samples the whole primary display and returns a JPEG only when a new,
-/// settled frame appears. Uses the same sampler as screen-share capture.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn list_screens() -> Result<Vec<anlg_detect::ScreenInfo>, String> {
+    tauri::async_runtime::spawn_blocking(anlg_detect::list_screens)
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+/// Samples a whole display (the primary one when `screen_id` is not set) and
+/// returns a JPEG only when a new, settled frame appears. Uses the same
+/// sampler as screen-share capture.
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn capture_screen<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     reset: bool,
+    screen_id: Option<u32>,
 ) -> Result<MeetingScreenShareCapture, String> {
     let sampler = app.state::<ScreenShareSamplerState>().inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -256,7 +266,7 @@ pub(crate) async fn capture_screen<R: tauri::Runtime>(
             *sampler = anlg_detect::ScreenShareSampler::default();
         }
 
-        let image = anlg_detect::capture_primary_screen().inspect_err(|_| sampler.pause())?;
+        let image = anlg_detect::capture_screen(screen_id).inspect_err(|_| sampler.pause())?;
         let keep = sampler.observe(anlg_detect::FrameSignature::of(&image));
         let (jpeg, width, height) = if keep {
             let (jpeg, width, height) = anlg_detect::encode_capture_jpeg(&image)?;

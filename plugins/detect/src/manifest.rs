@@ -15,6 +15,7 @@ pub(crate) const COMMANDS: &[&str] = &[
     "capture_meeting_chat_messages",
     "capture_meeting_screen_share",
     "capture_screen",
+    "list_screens",
     "get_preferred_languages",
     "get_current_locale_identifier",
     "set_mic_active_threshold",
