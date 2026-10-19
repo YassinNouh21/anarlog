@@ -127,7 +127,6 @@ describe("getSttModelTranscriptionMode", () => {
     );
     for (const [provider, model] of [
       ["groq", "whisper-large-v3-turbo"],
-      ["openrouter", "openai/gpt-4o-mini-transcribe"],
       ["together", "openai/whisper-large-v3"],
       ["speechmatics", "enhanced"],
       ["azure_speech", "fast-transcription"],
@@ -140,6 +139,12 @@ describe("getSttModelTranscriptionMode", () => {
     ]) {
       expect(getSttModelTranscriptionMode(provider, model)).toBe("batch");
     }
+  });
+
+  test("treats OpenRouter as live, through chunked batch uploads", () => {
+    expect(
+      getSttModelTranscriptionMode("openrouter", "openai/gpt-transcribe"),
+    ).toBe("live");
   });
 
   test("leaves models without an explicit mode to provider inference", () => {

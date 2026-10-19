@@ -9,8 +9,8 @@ use owhisper_client::{
     DashScopeAdapter, DashScopeStreamingAdapter, DeepgramAdapter, DeepgramFluxAdapter,
     ElevenLabsAdapter, FireworksAdapter, GladiaAdapter, GoogleGenerativeAiAdapter, GradiumAdapter,
     InworldAdapter, MetaAdapter, MistralAdapter, ModulateAdapter, NariAdapter, NvidiaAdapter,
-    OpenAIAdapter, RealtimeSttAdapter, SmallestAIAdapter, SonioxAdapter, WisprFlowAdapter,
-    XaiAdapter, anlg_ws_client,
+    OpenAIAdapter, OpenRouterAdapter, RealtimeSttAdapter, SmallestAIAdapter, SonioxAdapter,
+    WisprFlowAdapter, XaiAdapter, anlg_ws_client,
 };
 use owhisper_interface::stream::{Extra, StreamResponse};
 use owhisper_interface::{ControlMessage, MixedMessage};
@@ -166,6 +166,13 @@ pub(super) async fn spawn_rx_task(
         return Ok((result.0, result.1, result.2, "dashscope".to_string()));
     }
 
+    // OpenRouter has no streaming API: live transcription cuts the audio into
+    // speech chunks and sends each one to its batch API.
+    if adapter_kind == AdapterKind::OpenRouter {
+        let result = spawn_chunked_live_rx_task::<OpenRouterAdapter>(args, myself);
+        return Ok((result.0, result.1, result.2, adapter_kind.to_string()));
+    }
+
     macro_rules! dispatch_realtime {
         ($ak:expr, $is_dual:expr, $args:expr, $myself:expr,
          { $($var:ident => $adapter:ty),+ $(,)? },
@@ -224,6 +231,7 @@ pub(super) async fn spawn_rx_task(
         AzureSpeech,
         GoogleCloud,
         Groq,
+        // Handled above by spawn_chunked_live_rx_task.
         OpenRouter,
         SiliconFlow,
         Zai,
@@ -350,6 +358,62 @@ async fn spawn_soniqo_rx_task(
         });
 
         Ok((ChannelSender::Single(tx), rx_task, shutdown_tx))
+    }
+}
+
+fn spawn_chunked_live_rx_task<A: owhisper_client::BatchSttAdapter>(
+    args: ListenerArgs,
+    myself: ActorRef<ListenerMsg>,
+) -> (
+    ChannelSender,
+    tokio::task::JoinHandle<Vec<StreamResponse>>,
+    tokio::sync::oneshot::Sender<()>,
+) {
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let (session_offset_secs, extra) = build_extra(&args);
+    let client = owhisper_client::ChunkedLiveClient::<A>::new(
+        args.base_url.clone(),
+        args.api_key.clone(),
+        build_listen_params(&args),
+    );
+
+    if matches!(args.mode, crate::actors::ChannelMode::MicAndSpeaker) {
+        let (tx, rx) =
+            tokio::sync::mpsc::channel::<MixedMessage<(Bytes, Bytes), ControlMessage>>(32);
+        let (listen_stream, handle) =
+            client.from_realtime_audio_dual(tokio_stream::wrappers::ReceiverStream::new(rx));
+        let rx_task = tokio::spawn(async move {
+            futures_util::pin_mut!(listen_stream);
+            process_stream(
+                listen_stream,
+                handle,
+                myself,
+                shutdown_rx,
+                session_offset_secs,
+                extra,
+                None,
+            )
+            .await
+        });
+        (ChannelSender::Dual(tx), rx_task, shutdown_tx)
+    } else {
+        let (tx, rx) = tokio::sync::mpsc::channel::<MixedMessage<Bytes, ControlMessage>>(32);
+        let (listen_stream, handle) =
+            client.from_realtime_audio_single(tokio_stream::wrappers::ReceiverStream::new(rx));
+        let rx_task = tokio::spawn(async move {
+            futures_util::pin_mut!(listen_stream);
+            process_stream(
+                listen_stream,
+                handle,
+                myself,
+                shutdown_rx,
+                session_offset_secs,
+                extra,
+                None,
+            )
+            .await
+        });
+        (ChannelSender::Single(tx), rx_task, shutdown_tx)
     }
 }
 

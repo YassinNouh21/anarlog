@@ -1,3 +1,5 @@
+#[cfg(feature = "local")]
+mod chunked_live;
 pub mod parsing;
 mod segment;
 mod url_builder;
@@ -55,6 +57,8 @@ pub use assemblyai::*;
 pub use aws_transcribe::*;
 pub use azure_speech::*;
 pub use cartesia::*;
+#[cfg(feature = "local")]
+pub use chunked_live::{ChunkedLiveClient, ChunkedLiveHandle, ChunkedLiveStream};
 pub use cohere::*;
 pub use dashscope::*;
 pub use deepgram::*;
@@ -708,7 +712,6 @@ impl AdapterKind {
             | Self::AzureSpeech
             | Self::GoogleCloud
             | Self::Groq
-            | Self::OpenRouter
             | Self::SiliconFlow
             | Self::Zai
             | Self::RevAi
@@ -735,6 +738,8 @@ impl AdapterKind {
             | Self::SmallestAI
             | Self::WisprFlow
             | Self::GoogleGenerativeAi
+            // Live through chunked batch uploads (see chunked_live.rs).
+            | Self::OpenRouter
             | Self::Anarlog => true,
         }
     }
@@ -762,7 +767,8 @@ impl AdapterKind {
             Self::AssemblyAI => AssemblyAIAdapter::language_support_live(languages),
             Self::Gladia => GladiaAdapter::language_support_live(languages, model),
             Self::OpenAI => OpenAIAdapter::language_support_live(languages),
-            Self::OpenRouter => LanguageSupport::NotSupported,
+            // Live through chunked batch uploads (see chunked_live.rs).
+            Self::OpenRouter => OpenRouterAdapter::language_support_batch(languages),
             Self::SiliconFlow | Self::Zai => LanguageSupport::NotSupported,
             Self::Fireworks => FireworksAdapter::language_support_live(languages),
             Self::ElevenLabs => ElevenLabsAdapter::language_support_live(languages),

@@ -246,14 +246,60 @@ pub(super) async fn apply_local_diarization(
     if !is_local_batch(params) {
         return;
     }
-    let transcript_channels = output.response.results.channels.len();
-    let in_person = in_person_capture(listen_params, &output.response);
+    let known_speakers = params.known_speakers.clone();
+    diarize_response(
+        runtime,
+        params.session_id.clone(),
+        params.file_path.clone(),
+        &known_speakers,
+        listen_params,
+        &mut output.response,
+    )
+    .await;
+}
+
+/// Labels the speakers of an existing transcript (for example one made live)
+/// with the local diarizer, from the recording at `file_path`. Fully local.
+pub async fn diarize_transcript(
+    file_path: String,
+    listen_params: owhisper_interface::ListenParams,
+    known_speakers: Vec<KnownSpeaker>,
+    mut response: batch::Response,
+) -> batch::Response {
+    diarize_response(
+        Arc::new(SilentRuntime),
+        String::new(),
+        file_path,
+        &known_speakers,
+        &listen_params,
+        &mut response,
+    )
+    .await;
+    response
+}
+
+/// No progress events and no cancellation, for runs outside a batch job.
+struct SilentRuntime;
+
+impl BatchRuntime for SilentRuntime {
+    fn emit(&self, _event: BatchEvent) {}
+}
+
+async fn diarize_response(
+    runtime: Arc<dyn BatchRuntime>,
+    session_id: String,
+    file_path: String,
+    known_speakers: &[KnownSpeaker],
+    listen_params: &owhisper_interface::ListenParams,
+    response: &mut batch::Response,
+) {
+    let transcript_channels = response.results.channels.len();
+    let in_person = in_person_capture(listen_params, response);
     // Only word timings cross into the blocking task; the transcript itself
     // stays here so a panic in the diarizer cannot lose it. Channels that no
     // recording layout could plan are dropped now, before the recording is
     // resampled.
-    let unlabeled: Vec<UnlabeledChannel> = output
-        .response
+    let unlabeled: Vec<UnlabeledChannel> = response
         .results
         .channels
         .iter()
@@ -281,11 +327,8 @@ pub(super) async fn apply_local_diarization(
         return;
     }
 
-    let session_id = params.session_id.clone();
-    let file_path = params.file_path.clone();
     let listen_params = listen_params.clone();
-    let known_speakers: Vec<anlg_pyannote_local::KnownSpeaker> = params
-        .known_speakers
+    let known_speakers: Vec<anlg_pyannote_local::KnownSpeaker> = known_speakers
         .iter()
         .map(|speaker| anlg_pyannote_local::KnownSpeaker {
             id: speaker.id.clone(),
@@ -315,7 +358,7 @@ pub(super) async fn apply_local_diarization(
 
     match result {
         Ok(Ok(labels)) => {
-            let summary = apply_labels(&mut output.response, &labels);
+            let summary = apply_labels(response, &labels);
             tracing::info!(
                 anarlog.stt.provider.name = LOCAL_DIARIZATION_PROVIDER,
                 elapsed_ms = started_at.elapsed().as_millis() as u64,

@@ -5,7 +5,7 @@ mod runtime;
 mod subtitle;
 
 pub use batch::{
-    BatchParams, BatchProvider, BatchRunMode, BatchRunOutput, KnownSpeaker,
+    BatchParams, BatchProvider, BatchRunMode, BatchRunOutput, KnownSpeaker, diarize_transcript,
     expects_progressive_batch, run_batch, uses_local_diarization,
 };
 pub use error::*;

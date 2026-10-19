@@ -51,6 +51,7 @@ const COMMANDS: &[&str] = &[
     "reconcile_refined_speaker_clusters",
     "extract_voiceprint_candidates",
     "promote_voiceprint_candidates",
+    "diarize_session_transcript",
 ];
 
 fn main() {

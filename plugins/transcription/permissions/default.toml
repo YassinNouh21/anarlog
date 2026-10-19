@@ -42,6 +42,7 @@ permissions = [
     "allow-acknowledge-completed-transcription",
     "allow-extract-voiceprint-candidates",
     "allow-promote-voiceprint-candidates",
+    "allow-diarize-session-transcript",
     "allow-delete-processed-session-audio",
     "allow-parse-subtitle",
     "allow-export-to-vtt",

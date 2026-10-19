@@ -35,6 +35,8 @@ pub use adapter::{
     documented_language_codes_batch, documented_language_codes_live, is_anarlog_proxy,
     is_local_host, normalize_languages,
 };
+#[cfg(feature = "local")]
+pub use adapter::{ChunkedLiveClient, ChunkedLiveHandle, ChunkedLiveStream};
 pub use adapter::{StreamingBatchEvent, StreamingBatchStream};
 
 pub use anlg_ws_client;
