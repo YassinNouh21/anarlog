@@ -14,8 +14,8 @@ use owhisper_client::{AdapterKind, OpenAIAdapter};
 use crate::{BatchEvent, BatchRuntime};
 
 use consolidate::consolidate_hosted_speakers;
-pub use diarize::KnownSpeaker;
 use diarize::apply_local_diarization;
+pub use diarize::{KnownSpeaker, diarize_transcript};
 use progressive::run_progressive_batch_session;
 use simple::{run_apple_speech_batch, run_direct_batch_for_adapter_kind, run_soniqo_batch};
 

@@ -1066,7 +1066,7 @@ async fn maybe_assign_speakers_from_voiceprints<R: tauri::Runtime>(
     Ok(())
 }
 
-async fn load_transcript_words_and_hints(
+pub(crate) async fn load_transcript_words_and_hints(
     pool: &sqlx::SqlitePool,
     session_id: &str,
     transcript_id: &str,
@@ -1228,7 +1228,7 @@ fn assignment_hints_json(
         .map_err(|error| error.to_string())
 }
 
-async fn write_speaker_assignment_hints(
+pub(crate) async fn write_speaker_assignment_hints(
     pool: &sqlx::SqlitePool,
     session_id: &str,
     transcript_id: &str,

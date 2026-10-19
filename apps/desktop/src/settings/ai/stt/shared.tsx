@@ -511,6 +511,8 @@ const _PROVIDERS = [
     baseUrl: "https://openrouter.ai/api/v1",
     models: [
       "openai/gpt-transcribe",
+      // Strong on Arabic dialects and Arabic + English code-switching.
+      "elevenlabs/scribe-v2",
       "mistralai/voxtral-mini-transcribe",
       "openai/whisper-large-v3-turbo",
       "openai/whisper-large-v3",

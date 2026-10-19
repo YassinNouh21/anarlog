@@ -47,6 +47,7 @@ import {
   normalizeAudioRetention,
 } from "~/services/audio-retention";
 import { getEnhancerService } from "~/services/enhancer";
+import { maybeDiarizeLiveTranscript } from "~/services/live-diarization";
 import { maybeExtractVoiceprintCandidates } from "~/services/voiceprint";
 import { flushCanonicalSessionEditorChanges } from "~/session-sharing/editor-activity";
 import {
@@ -1162,6 +1163,20 @@ export function useCaptureLifecycle(sessionId: string) {
             }
           }
         }
+        if (
+          details.audioPath &&
+          transcriptIsComplete &&
+          hasTranscriptEvidence &&
+          !batchCompleted
+        ) {
+          await maybeDiarizeLiveTranscript({
+            provider,
+            sessionId,
+            transcriptId,
+            audioPath: details.audioPath,
+          });
+        }
+
         const shouldEnhance =
           hasTranscriptEvidence &&
           (transcriptIsComplete ||

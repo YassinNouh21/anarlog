@@ -31,11 +31,13 @@ pub type ChunkedLiveStream = ReceiverStream<Result<StreamResponse, crate::Error>
 
 pub struct ChunkedLiveClient<A: BatchSttAdapter> {
     batch: BatchClient<A>,
+    allowed_scripts: Vec<Script>,
 }
 
 impl<A: BatchSttAdapter> ChunkedLiveClient<A> {
     pub fn new(api_base: String, api_key: String, params: ListenParams) -> Self {
         Self {
+            allowed_scripts: allowed_scripts(&params.languages),
             batch: BatchClient::new(api_base, api_key, params),
         }
     }
@@ -83,6 +85,7 @@ impl<A: BatchSttAdapter> ChunkedLiveClient<A> {
             tokio::task::spawn_blocking(move || chunk_audio(audio_rx, chunk_tx));
             tokio::spawn(upload_chunks(
                 self.batch.clone(),
+                self.allowed_scripts.clone(),
                 channel,
                 channels,
                 chunk_rx,
@@ -182,6 +185,7 @@ fn chunk_audio(
 
 async fn upload_chunks<A: BatchSttAdapter>(
     batch: BatchClient<A>,
+    allowed_scripts: Vec<Script>,
     channel: usize,
     channels: usize,
     chunk_rx: mpsc::UnboundedReceiver<Result<AudioChunk, String>>,
@@ -191,7 +195,8 @@ async fn upload_chunks<A: BatchSttAdapter>(
     let mut results = UnboundedReceiverStream::new(chunk_rx)
         .map(|chunk| {
             let batch = batch.clone();
-            async move { transcribe_chunk(&batch, chunk?).await }
+            let allowed_scripts = allowed_scripts.clone();
+            async move { transcribe_chunk(&batch, &allowed_scripts, chunk?).await }
         })
         .buffered(PARALLEL_UPLOADS);
 
@@ -241,6 +246,7 @@ struct ChunkText {
 
 async fn transcribe_chunk<A: BatchSttAdapter>(
     batch: &BatchClient<A>,
+    allowed_scripts: &[Script],
     chunk: AudioChunk,
 ) -> Result<ChunkText, String> {
     let start = chunk.sample_start as f64 / SAMPLE_RATE as f64;
@@ -248,6 +254,7 @@ async fn transcribe_chunk<A: BatchSttAdapter>(
     let wav = write_wav(&chunk.samples).map_err(|error| format!("chunk_wav_failed: {error}"))?;
 
     let mut last_error = String::new();
+    let mut script_retried = false;
     for attempt in 0..UPLOAD_ATTEMPTS {
         match batch.transcribe_file(wav.path()).await {
             Ok(response) => {
@@ -260,6 +267,21 @@ async fn transcribe_chunk<A: BatchSttAdapter>(
                     .filter(|text| !text.is_empty())
                     .collect::<Vec<_>>()
                     .join(" ");
+                // Short chunks sometimes come back in a language nobody spoke.
+                // Try once more, then drop the chunk.
+                if has_unexpected_script(&text, allowed_scripts) {
+                    if !script_retried {
+                        script_retried = true;
+                        tracing::warn!(chunk.start = start, "chunk_unexpected_script_retry");
+                        continue;
+                    }
+                    tracing::warn!(chunk.start = start, "chunk_unexpected_script_dropped");
+                    return Ok(ChunkText {
+                        text: String::new(),
+                        start,
+                        end,
+                    });
+                }
                 return Ok(ChunkText { text, start, end });
             }
             Err(error) => {
@@ -269,6 +291,71 @@ async fn transcribe_chunk<A: BatchSttAdapter>(
         }
     }
     Err(format!("chunk_transcription_failed: {last_error}"))
+}
+
+/// Writing systems we can detect. Characters of other scripts are ignored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Script {
+    Latin,
+    Arabic,
+    Cyrillic,
+    Greek,
+    Hebrew,
+    Devanagari,
+    Thai,
+    Hangul,
+    Cjk,
+}
+
+fn script_of(c: char) -> Option<Script> {
+    match c as u32 {
+        0x0041..=0x024F if c.is_alphabetic() => Some(Script::Latin),
+        0x0370..=0x03FF => Some(Script::Greek),
+        0x0400..=0x052F => Some(Script::Cyrillic),
+        0x0590..=0x05FF => Some(Script::Hebrew),
+        0x0600..=0x06FF | 0x0750..=0x077F | 0x08A0..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFF => {
+            Some(Script::Arabic)
+        }
+        0x0900..=0x097F => Some(Script::Devanagari),
+        0x0E00..=0x0E7F => Some(Script::Thai),
+        0x1100..=0x11FF | 0xAC00..=0xD7AF => Some(Script::Hangul),
+        0x3040..=0x30FF | 0x4E00..=0x9FFF => Some(Script::Cjk),
+        _ => None,
+    }
+}
+
+/// Scripts of the spoken languages, plus Latin (English words are common in
+/// any meeting). Empty means no filter.
+fn allowed_scripts(languages: &[anlg_language::Language]) -> Vec<Script> {
+    if languages.is_empty() {
+        return Vec::new();
+    }
+    let mut scripts = vec![Script::Latin];
+    for language in languages {
+        let script = match language.iso639().code() {
+            "ar" | "fa" | "ur" | "ps" => Script::Arabic,
+            "ru" | "uk" | "bg" | "sr" | "be" | "kk" | "mk" => Script::Cyrillic,
+            "el" => Script::Greek,
+            "he" | "yi" => Script::Hebrew,
+            "hi" | "mr" | "ne" => Script::Devanagari,
+            "th" => Script::Thai,
+            "ko" => Script::Hangul,
+            "zh" | "ja" => Script::Cjk,
+            _ => Script::Latin,
+        };
+        if !scripts.contains(&script) {
+            scripts.push(script);
+        }
+    }
+    scripts
+}
+
+fn has_unexpected_script(text: &str, allowed: &[Script]) -> bool {
+    !allowed.is_empty()
+        && text
+            .chars()
+            .filter_map(script_of)
+            .any(|script| !allowed.contains(&script))
 }
 
 fn write_wav(samples: &[f32]) -> Result<tempfile::NamedTempFile, Box<dyn std::error::Error>> {
@@ -290,6 +377,28 @@ fn write_wav(samples: &[f32]) -> Result<tempfile::NamedTempFile, Box<dyn std::er
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejects_scripts_of_languages_nobody_spoke() {
+        use anlg_language::ISO639;
+
+        let arabic: Vec<anlg_language::Language> = vec![ISO639::Ar.into()];
+        let allowed = allowed_scripts(&arabic);
+        assert!(has_unexpected_script("Покажи.", &allowed));
+        assert!(has_unexpected_script("你好", &allowed));
+        assert!(!has_unexpected_script(
+            "إيه الكلام. Okay, check it.",
+            &allowed
+        ));
+        assert!(!has_unexpected_script("123 ...", &allowed));
+
+        let russian: Vec<anlg_language::Language> = vec![ISO639::Ru.into()];
+        assert!(!has_unexpected_script(
+            "Покажи.",
+            &allowed_scripts(&russian)
+        ));
+        assert!(!has_unexpected_script("Покажи.", &allowed_scripts(&[])));
+    }
 
     #[test]
     fn writes_16khz_mono_wav() {

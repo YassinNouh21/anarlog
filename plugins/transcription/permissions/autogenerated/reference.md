@@ -45,6 +45,7 @@ Default permissions for the plugin
 - `allow-acknowledge-completed-transcription`
 - `allow-extract-voiceprint-candidates`
 - `allow-promote-voiceprint-candidates`
+- `allow-diarize-session-transcript`
 - `allow-delete-processed-session-audio`
 - `allow-parse-subtitle`
 - `allow-export-to-vtt`
@@ -270,6 +271,32 @@ Enables the delete_transcribed_capture_audio command without any pre-configured 
 <td>
 
 Denies the delete_transcribed_capture_audio command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`transcription:allow-diarize-session-transcript`
+
+</td>
+<td>
+
+Enables the diarize_session_transcript command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`transcription:deny-diarize-session-transcript`
+
+</td>
+<td>
+
+Denies the diarize_session_transcript command without any pre-configured scope.
 
 </td>
 </tr>
