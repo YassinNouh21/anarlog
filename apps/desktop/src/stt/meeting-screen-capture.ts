@@ -30,6 +30,7 @@ export function startMeetingScreenCapture({
   let stopped = false;
   let resetSampler = true;
   let inFlight: Promise<void> | null = null;
+  let pendingPersistence: Promise<void> | null = null;
   let timeout: ReturnType<typeof setTimeout> | null = null;
   let permissionWarned = false;
   const captureMode = async (): Promise<CaptureMode> => {
@@ -68,6 +69,9 @@ export function startMeetingScreenCapture({
         return;
       }
 
+      if (stopped) {
+        return;
+      }
       const result =
         mode === "full"
           ? await detectCommands.captureScreen(resetSampler)
@@ -92,10 +96,23 @@ export function startMeetingScreenCapture({
         return;
       }
 
-      const record = await persistMeetingScreenCapture({
+      const persistence = persistMeetingScreenCapture({
         sessionId,
         capture: result.data,
       });
+      const settledPersistence = persistence.then(
+        () => undefined,
+        () => undefined,
+      );
+      pendingPersistence = settledPersistence;
+      let record: Awaited<typeof persistence>;
+      try {
+        record = await persistence;
+      } finally {
+        if (pendingPersistence === settledPersistence) {
+          pendingPersistence = null;
+        }
+      }
       if (record && mode === "full" && visionModel) {
         // Runs in the background so a slow model never delays the next capture.
         void describeMeetingScreen({
@@ -145,6 +162,6 @@ export function startMeetingScreenCapture({
       clearTimeout(timeout);
       timeout = null;
     }
-    await inFlight;
+    await pendingPersistence;
   };
 }
