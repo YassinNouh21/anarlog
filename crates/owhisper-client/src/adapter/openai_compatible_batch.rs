@@ -45,7 +45,7 @@ pub(crate) async fn transcribe(
         form = form.text(field.to_string(), "word");
     }
     if config.include_language
-        && let Some(language) = params.languages.first()
+        && let Some(language) = super::language::pinned_language(&params.languages)
     {
         form = form.text("language", language.iso639().code().to_string());
     }

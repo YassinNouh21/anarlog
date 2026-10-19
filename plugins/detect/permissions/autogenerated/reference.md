@@ -11,6 +11,7 @@ Default permissions for the plugin
 - `allow-send-meeting-chat-message`
 - `allow-capture-meeting-chat-messages`
 - `allow-capture-meeting-screen-share`
+- `allow-capture-screen`
 - `allow-set-respect-do-not-disturb`
 - `allow-set-ignored-bundle-ids`
 - `allow-set-included-bundle-ids`
@@ -76,6 +77,32 @@ Enables the capture_meeting_screen_share command without any pre-configured scop
 <td>
 
 Denies the capture_meeting_screen_share command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`detect:allow-capture-screen`
+
+</td>
+<td>
+
+Enables the capture_screen command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`detect:deny-capture-screen`
+
+</td>
+<td>
+
+Denies the capture_screen command without any pre-configured scope.
 
 </td>
 </tr>

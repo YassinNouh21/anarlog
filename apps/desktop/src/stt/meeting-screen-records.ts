@@ -1,7 +1,7 @@
 import type { MeetingScreenShareCapture } from "@anlg/plugin-detect";
 import { commands as fsSyncCommands } from "@anlg/plugin-fs-sync";
 
-import { executeTransaction, useLiveQuery } from "~/db";
+import { executeTransaction, liveQueryClient, useLiveQuery } from "~/db";
 import { enqueueDatabaseWrite } from "~/db/write-queue";
 import { catalogLocalNoteAttachment, sha256Hex } from "~/session/attachments";
 import { formatMeetingPlatform } from "~/stt/meeting-chat-records";
@@ -13,6 +13,8 @@ export type MeetingScreenRecord = {
   width: number;
   height: number;
   capturedAt: string;
+  /** Vision-model notes about this screen, added after capture. */
+  description?: string;
 };
 
 type MeetingScreenDocumentRow = { id: string; body: string };
@@ -43,20 +45,50 @@ export function useMeetingScreenRecords(
   return sessionId ? data : EMPTY_MEETING_SCREEN_RECORDS;
 }
 
+export async function loadMeetingScreenRecords(
+  sessionId: string,
+): Promise<MeetingScreenRecord[]> {
+  if (!sessionId) {
+    return [];
+  }
+  const rows = await liveQueryClient.execute<MeetingScreenDocumentRow>(
+    MEETING_SCREEN_RECORDS_SQL,
+    [sessionId],
+  );
+  return rows.flatMap(parseMeetingScreenRow);
+}
+
+/** Screen notes from the vision model, as extra context for the summary. */
+export function formatMeetingScreenContext(records: MeetingScreenRecord[]) {
+  const described = records.filter((record) => record.description?.trim());
+  if (described.length === 0) {
+    return "";
+  }
+  const sections = described.map((record) => {
+    const time = new Date(record.capturedAt).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `### Screen at ${time}\n${record.description!.trim()}`;
+  });
+  return `## Screens shown in the meeting\n${sections.join("\n\n")}`;
+}
+
 export async function persistMeetingScreenCapture({
   sessionId,
   capture,
 }: {
   sessionId: string;
   capture: MeetingScreenShareCapture;
-}): Promise<void> {
+}): Promise<MeetingScreenRecord | undefined> {
   if (!capture.jpeg) {
-    return;
+    return undefined;
   }
 
   const capturedAt = new Date().toISOString();
   const bytes = new Uint8Array(capture.jpeg);
-  const filename = `shared-screen-${capturedAt.replace(/[:.]/g, "-")}.jpg`;
+  const prefix = capture.platform ? "shared-screen" : "screen";
+  const filename = `${prefix}-${capturedAt.replace(/[:.]/g, "-")}.jpg`;
   const saved = await fsSyncCommands.attachmentSave(
     sessionId,
     capture.jpeg,
@@ -93,7 +125,7 @@ export async function persistMeetingScreenCapture({
   };
   const title = capture.platform
     ? `${formatMeetingPlatform(capture.platform)} shared screen`
-    : "Shared screen";
+    : "Screen";
 
   await enqueueDatabaseWrite(`session:${sessionId}`, () =>
     executeTransaction([
@@ -125,6 +157,7 @@ export async function persistMeetingScreenCapture({
       },
     ]),
   );
+  return record;
 }
 
 function parseMeetingScreenRow(
@@ -146,6 +179,9 @@ function parseMeetingScreenRow(
         width: Number(value.width) || 0,
         height: Number(value.height) || 0,
         capturedAt: value.capturedAt,
+        ...(typeof value.description === "string"
+          ? { description: value.description }
+          : {}),
       },
     ];
   } catch {

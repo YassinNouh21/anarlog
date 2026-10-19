@@ -59,11 +59,10 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
         .invoke_handler(specta_builder.invoke_handler())
         .setup(|app, _api| {
             let posthog_key = {
+                // Fork builds without a PostHog key run with analytics off.
                 #[cfg(not(debug_assertions))]
                 {
-                    let v = env!("POSTHOG_API_KEY");
-                    assert!(v.starts_with("phc_"));
-                    Some(v)
+                    option_env!("POSTHOG_API_KEY").filter(|v| v.starts_with("phc_"))
                 }
 
                 #[cfg(debug_assertions)]

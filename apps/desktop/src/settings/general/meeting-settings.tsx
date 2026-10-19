@@ -19,6 +19,7 @@ export function MeetingSettingsView({
   meetingDisclosureAutoPost,
   captureMeetingChat,
   captureSharedScreens,
+  captureFullScreen,
 }: {
   autoJoinScheduledMeetings: SettingItem;
   autoStartScheduledMeetings: SettingItem;
@@ -27,6 +28,7 @@ export function MeetingSettingsView({
   meetingDisclosureAutoPost: SettingItem;
   captureMeetingChat: SettingItem;
   captureSharedScreens: SettingItem;
+  captureFullScreen: SettingItem;
 }) {
   const currentPlatform = platform();
   const supportsMeetingAx =
@@ -100,6 +102,19 @@ export function MeetingSettingsView({
           }
           checked={captureSharedScreens.value}
           onChange={captureSharedScreens.onChange}
+        />
+      )}
+      {supportsScreenCapture && (
+        <SettingSwitchRow
+          title={<Trans>Capture my whole screen in Memos</Trans>}
+          description={
+            <Trans>
+              Save what is on your own screen during a meeting, and describe
+              each new screen with the AI model. Requires Screen Recording.
+            </Trans>
+          }
+          checked={captureFullScreen.value}
+          onChange={captureFullScreen.onChange}
         />
       )}
       <SettingSwitchRow

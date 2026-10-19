@@ -260,6 +260,9 @@ vi.mock("./meeting-chat-capture", () => ({
   startMeetingChatCapture: startMeetingChatCaptureMock,
 }));
 
+vi.mock("./useScreenVisionModel", () => ({
+  useScreenVisionModel: () => null,
+}));
 vi.mock("./meeting-screen-capture", () => ({
   startMeetingScreenCapture: vi.fn(() => async () => {}),
 }));

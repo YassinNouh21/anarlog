@@ -86,7 +86,7 @@ impl ElevenLabsAdapter {
             form = form.text("num_speakers", num_speakers.to_string());
         }
 
-        if let Some(lang) = params.languages.first() {
+        if let Some(lang) = super::super::language::pinned_language(&params.languages) {
             form = form.text("language_code", lang.iso639().code().to_string());
         }
 

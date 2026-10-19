@@ -246,6 +246,11 @@ export const SETTING_DEFINITIONS = {
     path: ["general", "capture_shared_screens"],
     default: false as boolean,
   },
+  capture_full_screen: {
+    type: "boolean",
+    path: ["general", "capture_full_screen"],
+    default: false as boolean,
+  },
   cloud_sync_enabled: {
     type: "boolean",
     path: ["general", "cloud_sync_enabled"],

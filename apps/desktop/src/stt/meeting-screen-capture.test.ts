@@ -4,18 +4,40 @@ import { startMeetingScreenCapture } from "./meeting-screen-capture";
 
 const {
   captureMeetingScreenShareMock,
+  captureScreenMock,
   checkPermissionMock,
+  describeMeetingScreenMock,
   persistMeetingScreenCaptureMock,
   platformMock,
+  settingsMock,
 } = vi.hoisted(() => ({
   captureMeetingScreenShareMock: vi.fn(),
+  captureScreenMock: vi.fn(),
   checkPermissionMock: vi.fn(),
+  describeMeetingScreenMock: vi.fn(),
   persistMeetingScreenCaptureMock: vi.fn(),
   platformMock: vi.fn(),
+  settingsMock: vi.fn(),
 }));
 
 vi.mock("@anlg/plugin-detect", () => ({
-  commands: { captureMeetingScreenShare: captureMeetingScreenShareMock },
+  commands: {
+    captureMeetingScreenShare: captureMeetingScreenShareMock,
+    captureScreen: captureScreenMock,
+  },
+}));
+
+vi.mock("~/settings/queries", () => ({
+  getStoredSettingValues: async () => settingsMock(),
+}));
+
+vi.mock("~/shared/config", () => ({
+  resolveConfigValue: (key: string, values: Record<string, unknown>) =>
+    Boolean(values[key]),
+}));
+
+vi.mock("~/stt/meeting-screen-notes", () => ({
+  describeMeetingScreen: describeMeetingScreenMock,
 }));
 
 vi.mock("@anlg/plugin-permissions", () => ({
@@ -56,6 +78,8 @@ describe("startMeetingScreenCapture", () => {
     platformMock.mockReturnValue("macos");
     checkPermissionMock.mockResolvedValue({ status: "ok", data: "authorized" });
     persistMeetingScreenCaptureMock.mockResolvedValue(undefined);
+    describeMeetingScreenMock.mockResolvedValue(undefined);
+    settingsMock.mockReturnValue({});
   });
 
   afterEach(() => {
@@ -133,6 +157,55 @@ describe("startMeetingScreenCapture", () => {
     await stopping;
 
     expect(persistMeetingScreenCaptureMock).not.toHaveBeenCalled();
+  });
+
+  test("full-screen mode captures the display and describes kept frames", async () => {
+    settingsMock.mockReturnValue({ capture_full_screen: true });
+    const record = { id: "session-1:meeting-screen:a1", attachmentId: "a1" };
+    persistMeetingScreenCaptureMock.mockResolvedValue(record);
+    captureScreenMock
+      .mockResolvedValueOnce({ status: "ok", data: { ...frame, jpeg: null } })
+      .mockResolvedValue({ status: "ok", data: frame });
+    const visionModel = { modelId: "vision" } as never;
+
+    const stop = startMeetingScreenCapture({
+      sessionId: "session-1",
+      visionModel,
+    });
+    await vi.advanceTimersByTimeAsync(3_000);
+    await stop();
+
+    expect(captureMeetingScreenShareMock).not.toHaveBeenCalled();
+    expect(captureScreenMock).toHaveBeenCalledWith(true);
+    expect(describeMeetingScreenMock).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      record,
+      jpeg: frame.jpeg,
+      model: visionModel,
+      language: "English",
+    });
+  });
+
+  test("full-screen mode without a vision model only saves the frame", async () => {
+    settingsMock.mockReturnValue({ capture_full_screen: true });
+    persistMeetingScreenCaptureMock.mockResolvedValue({ id: "r1" });
+    captureScreenMock.mockResolvedValue({ status: "ok", data: frame });
+
+    const stop = startMeetingScreenCapture({ sessionId: "session-1" });
+    await vi.advanceTimersByTimeAsync(0);
+    await stop();
+
+    expect(persistMeetingScreenCaptureMock).toHaveBeenCalledTimes(1);
+    expect(describeMeetingScreenMock).not.toHaveBeenCalled();
+  });
+
+  test("captures nothing when both screen settings are off", async () => {
+    const stop = startMeetingScreenCapture({ sessionId: "session-1" });
+    await vi.advanceTimersByTimeAsync(3_000);
+    await stop();
+
+    expect(captureScreenMock).not.toHaveBeenCalled();
+    expect(captureMeetingScreenShareMock).not.toHaveBeenCalled();
   });
 
   test("drops a frame when the setting is turned off mid-capture", async () => {

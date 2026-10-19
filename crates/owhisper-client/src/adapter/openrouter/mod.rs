@@ -216,7 +216,7 @@ async fn transcribe_with_provider_options(
         body["response_format"] = serde_json::Value::String("verbose_json".to_string());
         body["timestamp_granularities"] = serde_json::json!(["segment", "word"]);
     }
-    if let Some(language) = params.languages.first() {
+    if let Some(language) = super::language::pinned_language(&params.languages) {
         body["language"] = serde_json::Value::String(language.iso639().code().to_string());
     }
 
