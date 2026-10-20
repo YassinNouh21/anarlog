@@ -51,8 +51,9 @@ export function startMeetingScreenCapture({
       : null;
   };
 
-  // With more than one display, capture the one picked last time and ask
-  // which display has this meeting.
+  // Without a meeting window to capture, the whole display is captured. With
+  // more than one display, capture the one picked last time and ask which
+  // display has this meeting.
   const askWhichScreen = async () => {
     screenAsked = true;
     const result = await detectCommands.listScreens();
@@ -115,9 +116,6 @@ export function startMeetingScreenCapture({
       if (stopped) {
         return;
       }
-      if (mode === "full" && !screenAsked) {
-        await askWhichScreen();
-      }
       const result =
         mode === "full"
           ? await detectCommands.captureScreen(resetSampler, screenId)
@@ -129,6 +127,13 @@ export function startMeetingScreenCapture({
       if ((await captureMode()) !== mode || stopped) {
         resetSampler = true;
         return;
+      }
+      if (mode === "full" && result.status === "ok") {
+        if (result.data.app) {
+          toast.dismiss(PICK_SCREEN_TOAST_ID);
+        } else if (!screenAsked) {
+          await askWhichScreen();
+        }
       }
       if (result.status === "error") {
         console.warn(

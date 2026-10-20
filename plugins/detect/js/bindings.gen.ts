@@ -99,9 +99,11 @@ async captureMeetingScreenShare(reset: boolean) : Promise<Result<MeetingScreenSh
 }
 },
 /**
- * Samples a whole display (the primary one when `screen_id` is not set) and
- * returns a JPEG only when a new, settled frame appears. Uses the same
- * sampler as screen-share capture.
+ * Samples the meeting window (a Meet tab's browser window, or the Zoom,
+ * Teams or Slack call window) wherever it is, even behind other windows.
+ * Without an active call it samples a whole display (the primary one when
+ * `screen_id` is not set). Returns a JPEG only when a new, settled frame
+ * appears; `app` is set when the frame came from a meeting window.
  */
 async captureScreen(reset: boolean, screenId: number | null) : Promise<Result<MeetingScreenShareCapture, string>> {
     try {

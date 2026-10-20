@@ -233,12 +233,12 @@ describe("startMeetingScreenCapture", () => {
     });
     captureScreenMock.mockResolvedValue({
       status: "ok",
-      data: { ...frame, jpeg: null },
+      data: { ...frame, app: null, platform: null, jpeg: null },
     });
 
     const stop = startMeetingScreenCapture({ sessionId: "session-1" });
     await vi.advanceTimersByTimeAsync(0);
-    expect(captureScreenMock).toHaveBeenLastCalledWith(true, 1);
+    expect(captureScreenMock).toHaveBeenLastCalledWith(true, null);
 
     const [, options] = toastInfoMock.mock.calls[0];
     expect(options.action.label).toBe("Built-in");
@@ -250,6 +250,28 @@ describe("startMeetingScreenCapture", () => {
     await stop();
     expect(captureScreenMock).toHaveBeenLastCalledWith(true, 2);
     expect(listScreensMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not ask about screens while a meeting window is captured", async () => {
+    settingsMock.mockReturnValue({ capture_full_screen: true });
+    listScreensMock.mockResolvedValue({
+      status: "ok",
+      data: [
+        { id: 1, name: "Built-in", primary: true },
+        { id: 2, name: "DELL", primary: false },
+      ],
+    });
+    captureScreenMock.mockResolvedValue({
+      status: "ok",
+      data: { ...frame, jpeg: null },
+    });
+
+    const stop = startMeetingScreenCapture({ sessionId: "session-1" });
+    await vi.advanceTimersByTimeAsync(0);
+    await stop();
+
+    expect(listScreensMock).not.toHaveBeenCalled();
+    expect(toastInfoMock).not.toHaveBeenCalled();
   });
 
   test("full-screen mode without a vision model only saves the frame", async () => {
