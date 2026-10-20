@@ -7,33 +7,41 @@ const {
   captureScreenMock,
   checkPermissionMock,
   describeMeetingScreenMock,
+  listScreensMock,
   persistMeetingScreenCaptureMock,
   platformMock,
+  setSettingValueMock,
   settingsMock,
+  toastInfoMock,
 } = vi.hoisted(() => ({
   captureMeetingScreenShareMock: vi.fn(),
   captureScreenMock: vi.fn(),
   checkPermissionMock: vi.fn(),
   describeMeetingScreenMock: vi.fn(),
+  listScreensMock: vi.fn(),
   persistMeetingScreenCaptureMock: vi.fn(),
   platformMock: vi.fn(),
+  setSettingValueMock: vi.fn(),
   settingsMock: vi.fn(),
+  toastInfoMock: vi.fn(),
 }));
 
 vi.mock("@anlg/plugin-detect", () => ({
   commands: {
     captureMeetingScreenShare: captureMeetingScreenShareMock,
     captureScreen: captureScreenMock,
+    listScreens: listScreensMock,
   },
 }));
 
 vi.mock("~/settings/queries", () => ({
   getStoredSettingValues: async () => settingsMock(),
+  setSettingValue: setSettingValueMock,
 }));
 
 vi.mock("~/shared/config", () => ({
   resolveConfigValue: (key: string, values: Record<string, unknown>) =>
-    Boolean(values[key]),
+    values[key] ?? false,
 }));
 
 vi.mock("~/stt/meeting-screen-notes", () => ({
@@ -51,7 +59,7 @@ vi.mock("~/stt/meeting-screen-records", () => ({
 }));
 
 vi.mock("@anlg/ui/components/ui/toast", () => ({
-  toast: { warning: vi.fn() },
+  toast: { warning: vi.fn(), info: toastInfoMock, dismiss: vi.fn() },
 }));
 
 const frame = {
@@ -78,6 +86,10 @@ describe("startMeetingScreenCapture", () => {
     platformMock.mockReturnValue("macos");
     checkPermissionMock.mockResolvedValue({ status: "ok", data: "authorized" });
     persistMeetingScreenCaptureMock.mockResolvedValue(undefined);
+    listScreensMock.mockResolvedValue({
+      status: "ok",
+      data: [{ id: 1, name: "Built-in", primary: true }],
+    });
     describeMeetingScreenMock.mockResolvedValue(undefined);
     settingsMock.mockReturnValue({});
   });
@@ -197,7 +209,7 @@ describe("startMeetingScreenCapture", () => {
     await stop();
 
     expect(captureMeetingScreenShareMock).not.toHaveBeenCalled();
-    expect(captureScreenMock).toHaveBeenCalledWith(true);
+    expect(captureScreenMock).toHaveBeenCalledWith(true, null);
     expect(describeMeetingScreenMock).toHaveBeenCalledWith({
       sessionId: "session-1",
       record,
@@ -205,6 +217,39 @@ describe("startMeetingScreenCapture", () => {
       model: visionModel,
       language: "English",
     });
+  });
+
+  test("with two screens, asks which one has the meeting", async () => {
+    settingsMock.mockReturnValue({
+      capture_full_screen: true,
+      capture_screen_id: 0,
+    });
+    listScreensMock.mockResolvedValue({
+      status: "ok",
+      data: [
+        { id: 1, name: "Built-in", primary: true },
+        { id: 2, name: "DELL", primary: false },
+      ],
+    });
+    captureScreenMock.mockResolvedValue({
+      status: "ok",
+      data: { ...frame, jpeg: null },
+    });
+
+    const stop = startMeetingScreenCapture({ sessionId: "session-1" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(captureScreenMock).toHaveBeenLastCalledWith(true, 1);
+
+    const [, options] = toastInfoMock.mock.calls[0];
+    expect(options.action.label).toBe("Built-in");
+    expect(options.secondaryAction.label).toBe("DELL");
+    options.secondaryAction.onClick();
+    expect(setSettingValueMock).toHaveBeenCalledWith("capture_screen_id", 2);
+
+    await vi.advanceTimersByTimeAsync(3_000);
+    await stop();
+    expect(captureScreenMock).toHaveBeenLastCalledWith(true, 2);
+    expect(listScreensMock).toHaveBeenCalledTimes(1);
   });
 
   test("full-screen mode without a vision model only saves the frame", async () => {

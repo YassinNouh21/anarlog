@@ -12,6 +12,7 @@ Default permissions for the plugin
 - `allow-capture-meeting-chat-messages`
 - `allow-capture-meeting-screen-share`
 - `allow-capture-screen`
+- `allow-list-screens`
 - `allow-set-respect-do-not-disturb`
 - `allow-set-ignored-bundle-ids`
 - `allow-set-included-bundle-ids`
@@ -285,6 +286,32 @@ Enables the list_mic_using_applications command without any pre-configured scope
 <td>
 
 Denies the list_mic_using_applications command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`detect:allow-list-screens`
+
+</td>
+<td>
+
+Enables the list_screens command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`detect:deny-list-screens`
+
+</td>
+<td>
+
+Denies the list_screens command without any pre-configured scope.
 
 </td>
 </tr>

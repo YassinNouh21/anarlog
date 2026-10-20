@@ -251,6 +251,12 @@ export const SETTING_DEFINITIONS = {
     path: ["general", "capture_full_screen"],
     default: false as boolean,
   },
+  // Display picked for full-screen capture; 0 means the primary display.
+  capture_screen_id: {
+    type: "number",
+    path: ["general", "capture_screen_id"],
+    default: 0 as number,
+  },
   cloud_sync_enabled: {
     type: "boolean",
     path: ["general", "cloud_sync_enabled"],

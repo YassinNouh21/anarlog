@@ -99,12 +99,21 @@ async captureMeetingScreenShare(reset: boolean) : Promise<Result<MeetingScreenSh
 }
 },
 /**
- * Samples the whole primary display and returns a JPEG only when a new,
- * settled frame appears. Uses the same sampler as screen-share capture.
+ * Samples a whole display (the primary one when `screen_id` is not set) and
+ * returns a JPEG only when a new, settled frame appears. Uses the same
+ * sampler as screen-share capture.
  */
-async captureScreen(reset: boolean) : Promise<Result<MeetingScreenShareCapture, string>> {
+async captureScreen(reset: boolean, screenId: number | null) : Promise<Result<MeetingScreenShareCapture, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("plugin:detect|capture_screen", { reset }) };
+    return { status: "ok", data: await TAURI_INVOKE("plugin:detect|capture_screen", { reset, screenId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async listScreens() : Promise<Result<ScreenInfo[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:detect|list_screens") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -163,6 +172,7 @@ export type MeetingChatSendResult = { sent: boolean; app: MeetingApp | null; pla
 export type MeetingPlatform = "zoom" | "googleMeet" | "microsoftTeams" | "slack" | "discord" | "webex" | "unknown"
 export type MeetingScreenShareCapture = { sharing: boolean; app: MeetingApp | null; platform: MeetingPlatform | null; jpeg: number[] | null; width: number; height: number }
 export type MeetingSurface = "native" | "web" | "unknown"
+export type ScreenInfo = { id: number; name: string; primary: boolean }
 
 /** tauri-specta globals **/
 

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-list-screens"
+description = "Enables the list_screens command without any pre-configured scope."
+commands.allow = ["list_screens"]
+
+[[permission]]
+identifier = "deny-list-screens"
+description = "Denies the list_screens command without any pre-configured scope."
+commands.deny = ["list_screens"]

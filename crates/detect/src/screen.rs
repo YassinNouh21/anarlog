@@ -165,21 +165,60 @@ pub fn capture_meeting_window(_pid: i32, _window_title: Option<&str>) -> Result<
     Err("screen share capture is not supported on this platform".to_string())
 }
 
-/// Captures the primary display, so slides and apps the user shows themselves
-/// are recorded too (not only a share received inside a meeting window).
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
+pub struct ScreenInfo {
+    pub id: u32,
+    pub name: String,
+    pub primary: bool,
+}
+
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-pub fn capture_primary_screen() -> Result<RgbaImage, String> {
+pub fn list_screens() -> Result<Vec<ScreenInfo>, String> {
     let monitors = xcap::Monitor::all().map_err(|error| error.to_string())?;
-    let monitor = monitors
+    Ok(monitors
         .iter()
-        .find(|monitor| monitor.is_primary().unwrap_or(false))
+        .filter_map(|monitor| {
+            Some(ScreenInfo {
+                id: monitor.id().ok()?,
+                name: monitor
+                    .friendly_name()
+                    .or_else(|_| monitor.name())
+                    .unwrap_or_default(),
+                primary: monitor.is_primary().unwrap_or(false),
+            })
+        })
+        .collect())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub fn list_screens() -> Result<Vec<ScreenInfo>, String> {
+    Ok(Vec::new())
+}
+
+/// Captures a whole display, so slides and apps the user shows themselves are
+/// recorded too (not only a share received inside a meeting window). Uses the
+/// display with `screen_id`, or the primary display when it is not connected.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub fn capture_screen(screen_id: Option<u32>) -> Result<RgbaImage, String> {
+    let monitors = xcap::Monitor::all().map_err(|error| error.to_string())?;
+    let monitor = screen_id
+        .and_then(|id| {
+            monitors
+                .iter()
+                .find(|monitor| monitor.id().ok() == Some(id))
+        })
+        .or_else(|| {
+            monitors
+                .iter()
+                .find(|monitor| monitor.is_primary().unwrap_or(false))
+        })
         .or_else(|| monitors.first())
         .ok_or_else(|| "no display found".to_string())?;
     monitor.capture_image().map_err(|error| error.to_string())
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-pub fn capture_primary_screen() -> Result<RgbaImage, String> {
+pub fn capture_screen(_screen_id: Option<u32>) -> Result<RgbaImage, String> {
     Err("screen capture is not supported on this platform".to_string())
 }
 
