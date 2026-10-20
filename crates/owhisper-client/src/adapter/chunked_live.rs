@@ -3,7 +3,9 @@
 //!
 //! Each audio channel is cut into speech chunks at pauses. Every chunk is sent
 //! to the provider's batch API as a short WAV file, and the text comes back as
-//! final transcript segments, always in chunk order.
+//! final transcript segments, always in chunk order. On the system-audio
+//! channel of a call, speakers keep one label across chunks (see
+//! `live_speakers`).
 
 use std::time::Duration;
 
@@ -15,6 +17,7 @@ use owhisper_interface::{ControlMessage, ListenParams, MixedMessage};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
 
+use super::live_speakers::SpeakerTracker;
 use super::parsing::WordBuilder;
 use super::{BatchSttAdapter, segment};
 use crate::local_soniqo_live::i16_bytes_to_f32;
@@ -201,6 +204,13 @@ async fn upload_chunks<A: BatchSttAdapter>(
         })
         .buffered(PARALLEL_UPLOADS);
 
+    // Only the system audio of a call carries several voices; the mic is "You".
+    let mut tracker = if channels == 2 && channel == 1 {
+        tokio::task::spawn_blocking(SpeakerTracker::new).await.ok()
+    } else {
+        None
+    };
+
     let mut end = 0.0;
     while let Some(result) = results.next().await {
         let response = match result {
@@ -212,10 +222,13 @@ async fn upload_chunks<A: BatchSttAdapter>(
                 end = segment.end;
                 let mut response =
                     segment::response(&segment.text, segment.start, segment.end, true, None);
-                if !segment.words.is_empty()
+                let words =
+                    label_speakers(&mut tracker, segment.words, segment.samples, segment.start)
+                        .await;
+                if !words.is_empty()
                     && let StreamResponse::TranscriptResponse { channel, .. } = &mut response
                 {
-                    channel.alternatives[0].words = segment.words;
+                    channel.alternatives[0].words = words;
                 }
                 response
             }
@@ -236,6 +249,32 @@ async fn upload_chunks<A: BatchSttAdapter>(
     let _ = send(&response_tx, segment::finished(end), channel, channels).await;
 }
 
+/// Gives each word a session speaker, or none when the channel is not tracked.
+async fn label_speakers(
+    tracker: &mut Option<SpeakerTracker>,
+    mut words: Vec<owhisper_interface::stream::Word>,
+    samples: Vec<f32>,
+    offset: f64,
+) -> Vec<owhisper_interface::stream::Word> {
+    let Some(mut active) = tracker.take() else {
+        words.iter_mut().for_each(|word| word.speaker = None);
+        return words;
+    };
+    // Embeddings run ONNX inference, so they leave the async runtime.
+    match tokio::task::spawn_blocking(move || {
+        active.label(&samples, offset, &mut words);
+        (active, words)
+    })
+    .await
+    {
+        Ok((active, words)) => {
+            *tracker = Some(active);
+            words
+        }
+        Err(_) => Vec::new(),
+    }
+}
+
 async fn send(
     response_tx: &mpsc::Sender<Result<StreamResponse, crate::Error>>,
     mut response: StreamResponse,
@@ -250,13 +289,15 @@ struct ChunkText {
     text: String,
     start: f64,
     end: f64,
-    /// Word timings on the session clock, when the model returns them. Empty
-    /// means the chunk stays one timed segment.
+    /// Word timings on the session clock, when the model returns them, with
+    /// the provider's chunk speaker. Empty means the chunk stays one timed
+    /// segment.
     words: Vec<owhisper_interface::stream::Word>,
+    samples: Vec<f32>,
 }
 
-/// The words of a chunk response, moved onto the session clock. Provider
-/// speaker labels are dropped: they restart in every chunk.
+/// The words of a chunk response, moved onto the session clock. The speaker
+/// is still the provider's chunk speaker, which restarts in every chunk.
 fn session_words(
     response: &owhisper_interface::batch::Response,
     offset: f64,
@@ -272,6 +313,7 @@ fn session_words(
                 .start(offset + word.start)
                 .end(offset + word.end)
                 .confidence(word.confidence)
+                .speaker(word.speaker.map(|speaker| speaker as i32))
                 .build()
         })
         .collect()
@@ -314,6 +356,7 @@ async fn transcribe_chunk<A: BatchSttAdapter>(
                         start,
                         end,
                         words: Vec::new(),
+                        samples: Vec::new(),
                     });
                 }
                 let words = session_words(&response, start);
@@ -322,6 +365,7 @@ async fn transcribe_chunk<A: BatchSttAdapter>(
                     start,
                     end,
                     words,
+                    samples: chunk.samples,
                 });
             }
             Err(error) => {
@@ -459,7 +503,8 @@ mod tests {
         let texts: Vec<_> = words.iter().map(|word| word.word.as_str()).collect();
         assert_eq!(texts, ["hello", "there."]);
         assert_eq!((words[0].start, words[1].end), (10.1, 10.8));
-        assert!(words.iter().all(|word| word.speaker.is_none()));
+        let speakers: Vec<_> = words.iter().map(|word| word.speaker).collect();
+        assert_eq!(speakers, [Some(3), Some(4)]);
     }
 
     #[test]

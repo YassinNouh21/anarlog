@@ -1,5 +1,7 @@
 #[cfg(feature = "local")]
 mod chunked_live;
+#[cfg(feature = "local")]
+mod live_speakers;
 pub mod parsing;
 mod segment;
 mod url_builder;

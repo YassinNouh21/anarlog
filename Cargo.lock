@@ -11493,6 +11493,7 @@ dependencies = [
  "bytes",
  "data",
  "deepgram",
+ "embedding",
  "futures-util",
  "hound",
  "language",
