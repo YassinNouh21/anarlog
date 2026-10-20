@@ -38,12 +38,16 @@ pub async fn diarize_session_transcript<R: tauri::Runtime>(
     let recording_channels = anlg_audio_utils::source_from_path(&audio_path)
         .map(|source| u16::from(source.channels()))
         .map_err(|error| error.to_string())?;
-    let (response, word_ids) = transcript_response(&words, usize::from(recording_channels.min(2)));
+    let recording_channels = recording_channels.min(2);
+    let (response, word_ids) = transcript_response(&words, usize::from(recording_channels));
     if word_ids.iter().all(Vec::is_empty) {
         return Ok(0);
     }
 
+    // The diarizer plans each transcript channel against the recorded
+    // channels (mic and system audio), so it needs the real count.
     let listen_params = owhisper_interface::ListenParams {
+        channels: recording_channels as u8,
         num_speakers: speaker_count,
         ..Default::default()
     };

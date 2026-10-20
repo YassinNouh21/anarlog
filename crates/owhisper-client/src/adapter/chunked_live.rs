@@ -15,6 +15,7 @@ use owhisper_interface::{ControlMessage, ListenParams, MixedMessage};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
 
+use super::parsing::WordBuilder;
 use super::{BatchSttAdapter, segment};
 use crate::local_soniqo_live::i16_bytes_to_f32;
 use crate::{BatchClient, FinalizeHandle, ListenClientDualInput, ListenClientInput};
@@ -209,7 +210,14 @@ async fn upload_chunks<A: BatchSttAdapter>(
             }
             Ok(segment) => {
                 end = segment.end;
-                segment::response(&segment.text, segment.start, segment.end, true, None)
+                let mut response =
+                    segment::response(&segment.text, segment.start, segment.end, true, None);
+                if !segment.words.is_empty()
+                    && let StreamResponse::TranscriptResponse { channel, .. } = &mut response
+                {
+                    channel.alternatives[0].words = segment.words;
+                }
+                response
             }
             Err(message) => StreamResponse::ErrorResponse {
                 error_code: None,
@@ -242,6 +250,31 @@ struct ChunkText {
     text: String,
     start: f64,
     end: f64,
+    /// Word timings on the session clock, when the model returns them. Empty
+    /// means the chunk stays one timed segment.
+    words: Vec<owhisper_interface::stream::Word>,
+}
+
+/// The words of a chunk response, moved onto the session clock. Provider
+/// speaker labels are dropped: they restart in every chunk.
+fn session_words(
+    response: &owhisper_interface::batch::Response,
+    offset: f64,
+) -> Vec<owhisper_interface::stream::Word> {
+    response
+        .results
+        .channels
+        .iter()
+        .filter_map(|channel| channel.alternatives.first())
+        .flat_map(|alternative| &alternative.words)
+        .map(|word| {
+            WordBuilder::new(word.punctuated_word.as_deref().unwrap_or(&word.word))
+                .start(offset + word.start)
+                .end(offset + word.end)
+                .confidence(word.confidence)
+                .build()
+        })
+        .collect()
 }
 
 async fn transcribe_chunk<A: BatchSttAdapter>(
@@ -280,9 +313,16 @@ async fn transcribe_chunk<A: BatchSttAdapter>(
                         text: String::new(),
                         start,
                         end,
+                        words: Vec::new(),
                     });
                 }
-                return Ok(ChunkText { text, start, end });
+                let words = session_words(&response, start);
+                return Ok(ChunkText {
+                    text,
+                    start,
+                    end,
+                    words,
+                });
             }
             Err(error) => {
                 last_error = error.to_string();
@@ -398,6 +438,28 @@ mod tests {
             &allowed_scripts(&russian)
         ));
         assert!(!has_unexpected_script("Покажи.", &allowed_scripts(&[])));
+    }
+
+    #[test]
+    fn moves_chunk_words_onto_the_session_clock() {
+        let response: owhisper_interface::batch::Response = serde_json::from_value(serde_json::json!({
+            "metadata": {},
+            "results": { "channels": [{ "alternatives": [{
+                "transcript": "hello there",
+                "confidence": 1.0,
+                "words": [
+                    { "word": "hello", "start": 0.1, "end": 0.4, "confidence": 0.9, "channel": 0, "speaker": 3, "punctuated_word": null },
+                    { "word": "there", "start": 0.5, "end": 0.8, "confidence": 0.8, "channel": 0, "speaker": 4, "punctuated_word": "there." }
+                ]
+            }]}]}
+        }))
+        .unwrap();
+
+        let words = session_words(&response, 10.0);
+        let texts: Vec<_> = words.iter().map(|word| word.word.as_str()).collect();
+        assert_eq!(texts, ["hello", "there."]);
+        assert_eq!((words[0].start, words[1].end), (10.1, 10.8));
+        assert!(words.iter().all(|word| word.speaker.is_none()));
     }
 
     #[test]

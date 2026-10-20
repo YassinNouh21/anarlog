@@ -175,6 +175,12 @@ fn provider_options_for_model(
                 needs_verbose_json: true,
             })
         }
+        // Word timings only, no provider diarization: live chunks are labeled
+        // per chunk, so the local diarizer labels the whole meeting instead.
+        "elevenlabs/scribe-v2" => Some(ProviderOptionsRequest {
+            options: serde_json::Map::new(),
+            needs_verbose_json: true,
+        }),
         // NOT `mistralai/voxtral-mini-transcribe`: unlike Mistral's own direct
         // API, this model as served through OpenRouter rejects
         // `response_format: "verbose_json"` outright (400: "The selected
