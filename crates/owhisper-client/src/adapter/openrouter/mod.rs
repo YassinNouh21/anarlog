@@ -108,6 +108,8 @@ struct ProviderOptionsRequest {
     /// Speaker labels only appear on segments/words when the response asks
     /// for them, so diarization needs `verbose_json` + word timestamps.
     needs_verbose_json: bool,
+    /// OpenRouter's normalized `diarize` field.
+    diarize: bool,
 }
 
 /// Maps an OpenRouter model id to the provider-specific request needed to get
@@ -129,6 +131,7 @@ fn provider_options_for_model(
             Some(ProviderOptionsRequest {
                 options,
                 needs_verbose_json: false,
+                diarize: false,
             })
         }
         "microsoft/mai-transcribe-2" => {
@@ -140,6 +143,7 @@ fn provider_options_for_model(
             Some(ProviderOptionsRequest {
                 options,
                 needs_verbose_json: true,
+                diarize: false,
             })
         }
         "x-ai/grok-stt-1.0"
@@ -157,6 +161,7 @@ fn provider_options_for_model(
             Some(ProviderOptionsRequest {
                 options,
                 needs_verbose_json: true,
+                diarize: false,
             })
         }
         // Deepgram always turns diarization on for this codebase's direct
@@ -173,13 +178,15 @@ fn provider_options_for_model(
             Some(ProviderOptionsRequest {
                 options,
                 needs_verbose_json: true,
+                diarize: false,
             })
         }
-        // Word timings only, no provider diarization: live chunks are labeled
-        // per chunk, so the local diarizer labels the whole meeting instead.
+        // Word timings and speaker turns. Live chunks map the per-chunk
+        // speakers onto session speakers (see chunked_live.rs).
         "elevenlabs/scribe-v2" => Some(ProviderOptionsRequest {
             options: serde_json::Map::new(),
             needs_verbose_json: true,
+            diarize: true,
         }),
         // NOT `mistralai/voxtral-mini-transcribe`: unlike Mistral's own direct
         // API, this model as served through OpenRouter rejects
@@ -221,6 +228,9 @@ async fn transcribe_with_provider_options(
     if request.needs_verbose_json {
         body["response_format"] = serde_json::Value::String("verbose_json".to_string());
         body["timestamp_granularities"] = serde_json::json!(["segment", "word"]);
+    }
+    if request.diarize {
+        body["diarize"] = serde_json::Value::Bool(true);
     }
     if let Some(language) = super::language::pinned_language(&params.languages) {
         body["language"] = serde_json::Value::String(language.iso639().code().to_string());
